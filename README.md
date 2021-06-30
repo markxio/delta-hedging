@@ -10,7 +10,7 @@ Further investigating the Vitis open-source libraries we showcase our approach w
 * [GNU Make](https://www.gnu.org/software/make/)
 * [Xilinx Vitis v2020.2](https://www.xilinx.com/products/design-tools/vitis.html)
 * [Vitis Libraries](https://xilinx.github.io/Vitis_Libraries/)
-* [QuantLib](https://github.com/doxygen/doxygen)
+* [QuantLib](https://github.com/lballabio/QuantLib)
 * [Quantuccia](https://github.com/pcaspers/Quantuccia)
 
 ## Usage
@@ -45,9 +45,6 @@ cd bin
 
 ### Parameters
 
-The parameters which the program uses at run time are defined in the `resources/configurations/param.json` file.
-
-Key:
   *  `SAMP_NUM`: overall number of samples/paths
   *  `SAMP_PER_SIM`: number of samples per simulation
   *  `MAX_SAMPLE`: maximum number of samples
