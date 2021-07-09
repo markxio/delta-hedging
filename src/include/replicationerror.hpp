@@ -7,11 +7,13 @@
 #include <assert.h>
 #endif
 
-#define SAMP_NUM 50000 // MCM_NM * SAMP_PER_SIM
-#define SAMP_PER_SIM 5000 
+#define SAMP_NUM 50000 //4 // MAX_PATHS * MCM_NM
+#define MAX_PATHS 5000 //4
+#define MAX_STEPS 84 //21 //3
 #define MAX_SAMPLE 134217727
-#define MCM_NM 10
+#define MCM_NM 10 //1
 #define DT_USED double
+
 #define MAX(a, b) ((a) > (b) ? (a) : (b)) // from xf_fintech/utils.hpp
 
 namespace rep {
@@ -159,14 +161,6 @@ void cfB76EnginePrice(unsigned int call, DT f, DT k, DT v, DT r, DT t, DT* price
     *delta = delta_temp;
 }
 
-template <typename DT>
-DT getStockAfterGrowth(DT stock, hls::stream<DT>& pathStrmIn) {
-    DT logS = pathStrmIn.read();
-    DT s1 = qfi::FPExp(logS);
-    DT stock_temp = qfi::FPTwoMul(stock, s1);
-    return stock_temp;
-}
-
 /**
  * @brief Custom path pricer to compute replication error 
  * 
@@ -237,106 +231,159 @@ class ReplicationPathPricer {
 
             // discrete hedging interval
             DT dt = maturity/n;
-
-            // For simplicity, we assume the stock pays no dividends.
+                 
             /************************/
             /*** the initial deal ***/
             /************************/
             // option fair price (Black-Scholes) at t=0
-            DT premium;
+            DT premium, delta_t0;
             cfBSMEnginePrice<DT>(underlying, volatility, r, maturity, strike, dividendYield, call, &premium);
-           
-            DT delta_t0;
-            cfBSMEngineDeltaSpot<DT>(underlying, volatility, r, maturity, strike, dividendYield, call, &delta_t0);
+            cfBSMEngineDeltaSpot<DT>(underlying, volatility, r, maturity, strike, dividendYield, call, &delta_t0); 
 
-            // sell the option, cash in its premium
-            DT money_account_t0 = premium; //black.value();
-            // delta already computed
-            // now delta-hedge the option buying stock
-            money_account_t0 -= delta_t0*underlying; // delta_t0 is stockAmount
+            DT exp_r_x_dt = std::exp( r*dt ); // move to host
+            DT money_t0 = premium - delta_t0*underlying;         
+            DT money_T = money_t0 * pow(exp_r_x_dt, steps);
+            
+            dataflowRegion(steps, paths, underlying, volatility, r, maturity, strike, dividendYield, exp_r_x_dt, money_T, dt, call, pathStrmIn, priceStrmOut);
+        } // PE()
 
-            DT exp_r_x_dt = std::exp( r*dt );
+        void dataflowRegion(ap_uint<16> steps, ap_uint<16> paths, DT underlying, DT volatility, DT r, DT maturity, DT strike, DT dividendYield, DT exp_r_x_dt, DT money_T, DT dt, unsigned int call, hls::stream<DT>& pathStrmIn, hls::stream<DT>& priceStrmOut) {
+            hls::stream<DT> s1, s1Stock, s1Stock_copy, lastStock, delta, lastDelta, hedge, money_out;
 
-            // buffers across loops
-            DT money_account[SAMP_NUM], stock[SAMP_NUM], stockAmount[SAMP_NUM], t[SAMP_NUM];
-            DT stock_temp, delta;
+#pragma HLS STREAM variable=s1              depth=2
+#pragma HLS STREAM variable=s1Stock         depth=2
+#pragma HLS STREAM variable=s1Stock_copy    depth=2
+#pragma HLS STREAM variable=lastStock       depth=2
+#pragma HLS STREAM variable=delta           depth=3
+#pragma HLS STREAM variable=lastDelta       depth=3
+#pragma HLS STREAM variable=hedge           depth=3
+#pragma HLS STREAM variable=money_out       depth=2
+            
+            DT maturity_minus_t[MAX_STEPS];
 
-buffer_init_loop:
-            for (unsigned int i = 0; i < paths; i++) {
-                money_account[i] = money_account_t0;
-                stock[i] = underlying;
-                stockAmount[i] = delta_t0;
-                t[i] = 0.0;
+#pragma HLS dataflow
+            computeMaturity(paths, steps, maturity, dt, maturity_minus_t);
+            readPaths(paths, steps, pathStrmIn, s1);
+            computeStock(paths, steps, underlying, s1, s1Stock, s1Stock_copy, lastStock);
+            computeDelta(paths, steps, volatility, r, strike, dividendYield, call, s1Stock, maturity_minus_t, delta, lastDelta);
+            computeHedge(paths, steps, exp_r_x_dt, s1Stock_copy, delta, hedge);
+            reduceMoney(hedge, money_out);
+            optionExpiration(paths, steps, exp_r_x_dt, strike, money_T, money_out, lastDelta, lastStock, priceStrmOut);
+        }
+
+        void computeMaturity(ap_uint<16> paths, ap_uint<16> steps, DT maturity, DT dt, DT *maturity_minus_t) {
+maturity_timestep_loop:
+            for (unsigned int step = 0; step < steps; step++) {
+                maturity_minus_t[step] = maturity - step*dt;
             }
+        }
 
-path_loop:
-            for (unsigned int i = 0; i < paths; i++) {
-                /**********************************/
-                /*** hedging during option life ***/
-                /**********************************/
-
-timestep_loop:
-                for (unsigned int step = 0; step < steps-1; step++) {
-                    stock_temp = stock[i];
-                    // underlying stock price evolves lognormally
-                    // with a fixed known volatility that stays
-                    // constant throughout time
-                    DT stock_buffer = getStockAfterGrowth(stock_temp, pathStrmIn); 
-                    // buffer last step's stock value for option expiration loop
-                    stock[i] = stock_buffer;
-                    stock_temp = stock_buffer;
-                    
-                    // time flows
-                    t[i] += dt;
-                    
-                    // accruing on the money account
-                    money_account[i] *= exp_r_x_dt;
-
-                    // recalculate option value at the current stock value,
-                    // and the current time to maturity
-                    DT maturity_minus_t = maturity-t[i];
-
-                    // recalculate delta
-                    cfBSMEngineDeltaSpot<DT>(stock_temp, volatility, r, maturity_minus_t, strike, dividendYield, call, &delta);
-
-                    DT stockAmount_temp = stockAmount[i];
-                    // re-hedging
-                    money_account[i] -= (delta - stockAmount_temp)*stock_temp;
-                    stockAmount[i] = delta;
+        void readPaths(ap_uint<16> paths, ap_uint<16> steps, hls::stream<DT>& pathStrmIn, hls::stream<DT>& s1) {
+read_path_loop:
+            for (int i = 0; i < paths; i++) {
+read_timestep_loop:
+                for (int step = 0; step < steps; step++) {
+                    DT logS = pathStrmIn.read();
+                    DT s1_temp = qfi::FPExp(logS);
+                    s1.write(s1_temp);
                 }
             }
+        }
 
-option_expiration_loop:
+        void computeStock(ap_uint<16> paths, ap_uint<16> steps, DT underlying, hls::stream<DT>& s1, hls::stream<DT>& stock_out, hls::stream<DT>& stock_out_copy, hls::stream<DT>& lastStock) {
+stock_path_loop:
+            for (unsigned int i = 0; i < paths; i++) {
+                DT stock_temp = underlying;
+                stock_out.write(stock_temp);
+                DT stock_out_temp;
+stock_timestep_loop:
+                for (int step = 0; step < steps; step++) {
+                    DT s1_temp = s1.read();
+                    stock_out_temp = qfi::FPTwoMul(stock_temp, s1_temp); // 100.0 + 0.01 * (step+1)
+                    stock_out.write(stock_out_temp);
+                    stock_out_copy.write(stock_out_temp);
+                    stock_temp = stock_out_temp;
+                }
+                lastStock.write(stock_out_temp);
+            }
+        }
+
+        void computeDelta(ap_uint<16> paths, ap_uint<16> steps, DT volatility, DT r, DT strike, DT dividendYield, unsigned int call, hls::stream<DT>& stock_stream, DT *maturity, hls::stream<DT>& delta_out, hls::stream<DT>& lastDelta) {
+delta_path_loop:
+            for (unsigned int i = 0; i < paths; i++) { 
+                DT delta_temp;
+delta_timestep_loop:
+                for (unsigned int step = 0; step < steps; step++) {
+                    DT stock_temp = stock_stream.read();
+                    cfBSMEngineDeltaSpot<DT>(stock_temp, volatility, r, maturity[step], strike, dividendYield, call, &delta_temp);
+                    delta_out.write(delta_temp);
+                }
+                DT discard = stock_stream.read(); // only need delta for up to steps-1 (aka delta[path][steps-1] == stockAmount[path][steps])
+
+                lastDelta.write(delta_temp);
+            }
+        }
+
+        void computeHedge(ap_uint<16> paths, ap_uint<16> steps, DT exp_r_x_dt, hls::stream<DT>& stock, hls::stream<DT>& delta, hls::stream<DT>& hedge) {
+hedge_path_loop:
+            for (unsigned int i = 0; i < paths; i++) {
+                DT delta_p0 = delta.read();
+hedge_timestep_loop:
+                for (unsigned int step = 0; step < steps-1; step++) {
+#pragma HLS pipeline
+                    DT stock_temp = stock.read();
+                    DT delta_p1 = delta.read();
+                    DT hedge_temp = (delta_p1 - delta_p0) * stock_temp * pow(exp_r_x_dt, (steps)-(step+1));
+                    //printf("hedge: %f, delta_p0: %.10f, delta_p1: %.10f, stock_temp: %f, pow: %.10f\n", hedge_temp, delta_p0, delta_p1, stock_temp, pow(exp_r_x_dt, steps-(step+1)));
+                    hedge.write(hedge_temp);
+                    delta_p0 = delta_p1;
+                }
+                DT discardLastStock = stock.read(); // we do not delta-hedge for the very last stock
+            }
+        }
+
+        void reduceMoney(hls::stream<DT>& hedge, hls::stream<DT>& hedgeCompoundInterestSum) {
+reduce_path_loop:
+            for (unsigned int path = 0; path < MAX_PATHS; path++) {
+                DT sum = 0.0;
+reduce_timestep_loop:
+                for (unsigned int step = 0; step < MAX_STEPS-1; step++) {
+                     sum += hedge.read();
+                }
+                hedgeCompoundInterestSum.write(sum);
+            }
+        }
+
+        void optionExpiration(ap_uint<16> paths, ap_uint<16> steps, DT exp_r_x_dt, DT strike, DT money_T, hls::stream<DT>& money_account, hls::stream<DT>& lastDelta, hls::stream<DT>& lastStock, hls::stream<DT>& priceStrmOut) {
+expiration_path_loop:
             for (unsigned int i = 0; i < paths; i++) {
                 /*************************/
                 /*** option expiration ***/
                 /*************************/
-                // read buffer: last step's stock value in stock[SAMP_NUM]
-                DT stock_of_last_step = stock[i];
-                DT final_stock = getStockAfterGrowth(stock_of_last_step, pathStrmIn); 
- 
-                // read buffer: last step's money_account
-                DT money_account_temp = money_account[i];
-                // last accrual on money account
-                money_account_temp *= exp_r_x_dt;
+                DT final_stock = lastStock.read();
+                DT final_stockAmount = lastDelta.read();
+
+                // note: money_account[] and money_T already compounded
+                DT money_temp = money_account.read();
+                DT final_money_account = money_T - money_temp; 
 
                 // the hedger delivers the option payoff to the option holder
                 DT optionPayoff = MAX(0, final_stock-strike);
-                money_account_temp -= optionPayoff;
-               
-                // read buffer: last step's stockAmount  
-                DT final_stockAmount = stockAmount[i]; 
+                final_money_account -= optionPayoff;
+                
                 // and unwinds the hedge selling his stock position
-                money_account_temp += final_stockAmount*final_stock;
+                final_money_account += final_stockAmount*final_stock;
+
                 // final Profit&Loss
-                priceStrmOut.write(money_account_temp);
+                priceStrmOut.write(final_money_account);
             }
-        } // PE()
+        } 
 
         void Pricing(ap_uint<16> steps,
                     ap_uint<16> paths,
                     hls::stream<DT> pathStrmIn[InN],
                     hls::stream<DT> priceStrmOut[OutN]) {
+inn_loop:
                 for (int i = 0; i < InN; ++i) {
 #pragma HLS unroll
                     PE(steps, paths, pathStrmIn[i], priceStrmOut[i]);
@@ -392,7 +439,7 @@ option_expiration_loop:
                     unsigned int maxSamples = MAX_SAMPLE) {
                 
                 // number of samples per simulation
-                const static int SN = SAMP_PER_SIM; 
+                const static int SN = MAX_PATHS; //1024; 
 
                 // number of variate
                 const static int VN = 1;
