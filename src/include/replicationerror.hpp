@@ -3,6 +3,7 @@
 #include "ap_int.h"
 #include "hls_stream.h"
 #include "xf_fintech/enums.hpp"
+//#include "xf_fintech/utils.hpp" // FPTwoMul, FPTwoSub, FPTwoAdd, FPExp, divide_by_2, mul_by_2
 #ifndef __SYNTHESIS__
 #include <assert.h>
 #endif
@@ -258,7 +259,7 @@ class ReplicationPathPricer {
 #pragma HLS STREAM variable=lastDelta       depth=3
 #pragma HLS STREAM variable=hedge           depth=3
 #pragma HLS STREAM variable=money_out       depth=2
-            
+           
             DT maturity_minus_t[MAX_STEPS];
 
 #pragma HLS dataflow
@@ -366,11 +367,11 @@ expiration_path_loop:
                 // note: money_account[] and money_T already compounded
                 DT money_temp = money_account.read();
                 DT final_money_account = money_T - money_temp; 
-
+                
                 // the hedger delivers the option payoff to the option holder
                 DT optionPayoff = MAX(0, final_stock-strike);
                 final_money_account -= optionPayoff;
-                
+
                 // and unwinds the hedge selling his stock position
                 final_money_account += final_stockAmount*final_stock;
 
