@@ -1,0 +1,3 @@
+[submodule "src/cpu_total/Quantuccia"]
+	path = src/cpu_total/Quantuccia
+	url = https://github.com/markxio/Quantuccia

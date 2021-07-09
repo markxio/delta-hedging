@@ -88,8 +88,6 @@ class ReplicationError
 
 				// store option's vega, since Derman and Kamal's formula needs it
 				vega_ = black.vega(maturity_);
-				std::cout << "Option vega: " << vega_ << std::endl;
-				std::cout << std::endl;
 
 				std::cout << std::setw(8) << " " << " | "
 					<< std::setw(8) << " " << " | "
@@ -197,11 +195,10 @@ int main(int, char* []) {
 		auto t_rp_compute_84 = duration_cast<milliseconds>(t4-t3);
 		auto t_overall = duration_cast<milliseconds>(t4-t1);
 
-		std::cout << "\nExecution time\n"
+		std::cout << "\nExecution time for 50k paths/samples\n"
 			<< "-------------------------------------------\n"
-			<< std::setw(25) << "ReplicationError " << std::setw(12) << t_rp_error.count()  << " ms\n"
-			<< std::setw(25) << "rp.compute(hedgesNum=21)" << std::setw(12) << t_rp_compute_84.count() << " ms\n"
-			<< std::setw(25) << "rp.compute(hedgesNum=84)" << std::setw(12) << t_rp_compute_21.count() << " ms\n"
+			<< std::setw(25) << "for 21 trades/timesteps" << std::setw(12) << t_rp_compute_21.count() << " ms\n"
+			<< std::setw(25) << "for 84 trades/timesteps" << std::setw(12) << t_rp_compute_84.count() << " ms\n"
 			<< std::setw(25) << "Overall" << std::setw(12) << t_overall.count() << " ms\n" 
 			<< "-------------------------------------------" << std::endl;
 

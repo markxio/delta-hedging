@@ -9,10 +9,7 @@ else
     echo "git submodule already initalized -- compiling.."
 fi
 
-# -M option for depeendency list
-# -MM option for dependency list without system headers, with -o flag outputs to txt file
-# -H option gives dpendency list as tree
-g++ -O3 DiscreteHedgingQuantuccia.cpp -o DiscreteHedgingQuantuccia -I${QUANTUCCIA}
+g++ -std=c++11 -O3 DiscreteHedgingQuantuccia.cpp -o DiscreteHedgingQuantuccia -I${QUANTUCCIA} -I/home/software/boost/1.69-GNU/include
 
-# compile with QuantLib (install first)
-g++ -O3 DiscreteHedging.cpp -o DiscreteHedging -lQuantLib
+# compile with QuantLib (installation required, see official QuantLib website)
+#g++ -O3 DiscreteHedging.cpp -o DiscreteHedging -lQuantLib

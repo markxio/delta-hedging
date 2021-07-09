@@ -211,10 +211,9 @@ int main(int, char* []) {
         auto t_rp_compute_84 = duration_cast<milliseconds>(t4-t3);
         auto t_overall = duration_cast<milliseconds>(t4-t1);
 
-        std::cout << "Execution time"
- 	          << "ReplicationError " << std::setw(12) << t_rp_error.count()  << " ms "
-        	  << "rp.compute(hedgesNum=21)" << std::setw(12) << t_rp_compute_84.count() << " ms "
-		  << "rp.compute(hedgesNum=84)" << std::setw(12) << t_rp_compute_21.count() << " ms "
+        std::cout << "Execution time for 50k paths/samples"
+        	  << "for 21 timesteps/trades" << std::setw(12) << t_rp_compute_21.count() << " ms "
+		  << "for 84 timesteps/trades" << std::setw(12) << t_rp_compute_84.count() << " ms "
 		  << "Overall" << std::setw(12) << t_overall.count() << " ms " << std::endl;
 
         return 0;
