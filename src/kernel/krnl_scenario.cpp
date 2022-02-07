@@ -7,8 +7,8 @@
 
 #include "../include/replicationerror.hpp"
 
-extern "C" void krnl_scenario(double maturity, unsigned int strike, unsigned int underlying, double volatility, double riskFreeRate, const unsigned int scenarios, unsigned int hedgesNum, double *sampleInput, double *result) {
-#pragma HLS INTERFACE m_axi port=sampleInput offset=slave bundle=sampleInput_port
+extern "C" void krnl_scenario(double maturity, unsigned int strike, unsigned int underlying, double volatility, double riskFreeRate, const unsigned int scenarios, unsigned int hedgesNum, double *result) {
+
 #pragma HLS INTERFACE m_axi port=result offset=slave bundle=result_port
 
 #pragma HLS INTERFACE s_axilite port=maturity bundle=control
@@ -18,7 +18,6 @@ extern "C" void krnl_scenario(double maturity, unsigned int strike, unsigned int
 #pragma HLS INTERFACE s_axilite port=riskFreeRate bundle=control
 #pragma HLS INTERFACE s_axilite port=scenarios bundle=control
 #pragma HLS INTERFACE s_axilite port=hedgesNum bundle=control
-#pragma HLS INTERFACE s_axilite port=sampleInput bundle=control
 #pragma HLS INTERFACE s_axilite port=result bundle=control
 #pragma HLS INTERFACE s_axilite port=return bundle=control
 
@@ -29,7 +28,7 @@ extern "C" void krnl_scenario(double maturity, unsigned int strike, unsigned int
     // MCEuropeanEngine args
     unsigned int seed = 3;
     double requiredTolerance = 0.001;
-    unsigned int requiredSamples = SAMP_NUM;    
+    unsigned int requiredSamples = scenarios; //SAMP_NUM;    
     unsigned int timeSteps = hedgesNum; 
 
     ap_uint<32> seeds[MCM_NM];
@@ -38,5 +37,5 @@ extern "C" void krnl_scenario(double maturity, unsigned int strike, unsigned int
     }
 
     // implement MCEuropeanEngine with custom PathPricer
-    rep::MCEuropeanEngine<DT_USED, MCM_NM>(underlying, volatility, dividendYield, riskFreeRate, maturity, strike, optionType, seeds, /*&result[0]*/ result, requiredTolerance, requiredSamples, timeSteps);		
+    rep::MCEuropeanEngine<DT_USED, MCM_NM>(underlying, volatility, dividendYield, riskFreeRate, maturity, strike, optionType, seeds, result, requiredTolerance, requiredSamples, timeSteps);
 }

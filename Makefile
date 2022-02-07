@@ -24,7 +24,7 @@ XCLBIN := krnl_scenario.$(TARGET).xclbin
 
 KERNEL_NAME := krnl_scenario
 
-VITIS_LIBRARIES_QF := /home/nx04/nx04/markk/Vitis_Libraries/quantitative_finance
+VITIS_LIBRARIES_QF := /home/nx08/nx08/markkfpga/Vitis_Libraries/quantitative_finance
 VITIS_LIBRARIES_L1 := /L1/include/
 VITIS_LIBRARIES_L2 := /L2/include/
 
@@ -37,11 +37,11 @@ OBJECTS  := $(SOURCES:$(DEVICE_SRCDIR)/%.cpp=%.xo)
 
 # Host building global settings
 CXXFLAGS := -I$(XILINX_XRT)/include/ -I$(XILINX_VIVADO)/include/ -Wall -O3 -std=c++11 -L$(XILINX_XRT)/lib/ -lpthread -lrt -lstdc++
-CXXFLAGS2 := -lOpenCL 
+CXXFLAGS2 := -lhostsupport -lxilinxopencl #-lOpenCL 
 
 # Kernel compiler & linker global settings
-KRNL_COMPILE_OPTS := -t $(TARGET) --config ../design.cfg --save-temps -j 8 -I$(VITIS_LIBRARIES_QF)$(VITIS_LIBRARIES_L1) -I$(VITIS_LIBRARIES_QF)$(VITIS_LIBRARIES_L2)
-KRNL_LINK_OPTS := -t $(TARGET) --config ../link.cfg -j 8
+KRNL_COMPILE_OPTS := -t $(TARGET) --config ../design.cfg --save-temps -j 48 -I$(VITIS_LIBRARIES_QF)$(VITIS_LIBRARIES_L1) -I$(VITIS_LIBRARIES_QF)$(VITIS_LIBRARIES_L2)
+KRNL_LINK_OPTS := -t $(TARGET) --config ../link.cfg -j 48
 
 build:  $(XO) $(XCLBIN) $(HOST_EXE) emconfig
   

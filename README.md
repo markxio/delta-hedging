@@ -34,6 +34,10 @@ make host
 make device TARGET=hw DEVICE=xilinx_u280_xdma_201920_3
 ```
 
+#### Compile and run CPU code
+
+To compile the CPU reference code, go to src/cpu\_total and run `./compile.sh`. This initialises the git submodule for Quantuccia and compiles the reference code. Run the binary with `./DiscreteHedgingQuantuccia`
+
 ### Running
 
 To run the project:
