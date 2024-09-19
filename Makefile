@@ -17,14 +17,15 @@ help:
   @echo ""
 #######################################################################################
 TARGET := sw_emu
-PLATFORM := xilinx_u280_xdma_201920_3 #xilinx_u250_xdma_201830_2
+#PLATFORM := xilinx_u280_xdma_201920_3 #xilinx_u250_xdma_201830_2
+PLATFORM := xilinx_u280_gen3x16_xdma_1_202211_1
 HOST_EXE := host
 XO := krnl_scenario.$(TARGET).xo
 XCLBIN := krnl_scenario.$(TARGET).xclbin
 
 KERNEL_NAME := krnl_scenario
 
-VITIS_LIBRARIES_QF := /home/nx04/nx04/markk/Vitis_Libraries/quantitative_finance
+VITIS_LIBRARIES_QF := /home/nx08/nx08/markkfpga/Vitis_Libraries/quantitative_finance
 VITIS_LIBRARIES_L1 := /L1/include/
 VITIS_LIBRARIES_L2 := /L2/include/
 
@@ -40,8 +41,8 @@ CXXFLAGS := -I$(XILINX_XRT)/include/ -I$(XILINX_VIVADO)/include/ -Wall -O3 -std=
 CXXFLAGS2 := -lOpenCL 
 
 # Kernel compiler & linker global settings
-KRNL_COMPILE_OPTS := -t $(TARGET) --config ../design.cfg --save-temps -j 8 -I$(VITIS_LIBRARIES_QF)$(VITIS_LIBRARIES_L1) -I$(VITIS_LIBRARIES_QF)$(VITIS_LIBRARIES_L2)
-KRNL_LINK_OPTS := -t $(TARGET) --config ../link.cfg -j 8
+KRNL_COMPILE_OPTS := -t $(TARGET) --config ../design.cfg --save-temps -j 48 -I$(VITIS_LIBRARIES_QF)$(VITIS_LIBRARIES_L1) -I$(VITIS_LIBRARIES_QF)$(VITIS_LIBRARIES_L2)
+KRNL_LINK_OPTS := -t $(TARGET) --config ../link.cfg -j 48
 
 build:  $(XO) $(XCLBIN) $(HOST_EXE) emconfig
   

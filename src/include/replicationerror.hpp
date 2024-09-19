@@ -8,7 +8,7 @@
 #endif
 
 #define SAMP_NUM 50000 // MCM_NM * SAMP_PER_SIM
-#define SAMP_PER_SIM 5000 
+#define SAMP_PER_SIM 50000 
 #define MAX_SAMPLE 134217727
 #define MCM_NM 10
 #define DT_USED double
@@ -454,7 +454,12 @@ init_pathpri_pathgen_loop:
                 }
 
                 // call monte carlo simulation
-                DT replicationError = qf::mcSimulation<DT, RNG, qfi::BSPathGenerator<DT, SF, SN, Antithetic>, ReplicationPathPricer<sty, DT, SF, SN, Antithetic>, qfi::RNGSequence<DT, RNG>, UN, VN, SN>(timeSteps, maxSamples, requiredSamples, requiredTolerance, pathGenInst, pathPriInst, rngSeqInst);
+                DT replicationError = qf::mcSimulation<
+                    DT, 
+                    RNG, 
+                    qfi::BSPathGenerator<DT, SF, SN, Antithetic>, 
+                    ReplicationPathPricer<sty, DT, SF, SN, Antithetic>, 
+                    qfi::RNGSequence<DT, RNG>, UN, VN, SN>(timeSteps, maxSamples, requiredSamples, requiredTolerance, pathGenInst, pathPriInst, rngSeqInst);
 
                 // output the price of option
                 output[0] = replicationError;
