@@ -9,10 +9,10 @@
 #endif
 
 #define SAMP_NUM 50000 //4 // MAX_PATHS * MCM_NM
-#define MAX_PATHS 5000 //4
+#define MAX_PATHS 50000 //4
 #define MAX_STEPS 84 //21 //3
 #define MAX_SAMPLE 134217727
-#define MCM_NM 10 //1
+#define MCM_NM 10 //10
 #define DT_USED double
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b)) // from xf_fintech/utils.hpp
