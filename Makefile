@@ -17,8 +17,8 @@ help:
   @echo ""
 #######################################################################################
 TARGET := sw_emu
-#PLATFORM := xilinx_u280_xdma_201920_3 #xilinx_u250_xdma_201830_2
-PLATFORM := xilinx_u280_gen3x16_xdma_1_202211_1
+PLATFORM := xilinx_u280_xdma_201920_3 #xilinx_u250_xdma_201830_2
+#PLATFORM := xilinx_u280_gen3x16_xdma_1_202211_1
 HOST_EXE := host
 XO := krnl_scenario.$(TARGET).xo
 XCLBIN := krnl_scenario.$(TARGET).xclbin
@@ -38,7 +38,7 @@ OBJECTS  := $(SOURCES:$(DEVICE_SRCDIR)/%.cpp=%.xo)
 
 # Host building global settings
 CXXFLAGS := -I$(XILINX_XRT)/include/ -I$(XILINX_VIVADO)/include/ -Wall -O3 -std=c++11 -L$(XILINX_XRT)/lib/ -lpthread -lrt -lstdc++
-CXXFLAGS2 := -lOpenCL 
+CXXFLAGS2 := -lOpenCL -lhostsupport #-lxilinxopencl 
 
 # Kernel compiler & linker global settings
 KRNL_COMPILE_OPTS := -t $(TARGET) --config ../design.cfg --save-temps -j 48 -I$(VITIS_LIBRARIES_QF)$(VITIS_LIBRARIES_L1) -I$(VITIS_LIBRARIES_QF)$(VITIS_LIBRARIES_L2)

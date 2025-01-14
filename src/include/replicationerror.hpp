@@ -12,7 +12,7 @@
 #define MAX_PATHS 50000 //4
 #define MAX_STEPS 84 //21 //3
 #define MAX_SAMPLE 134217727
-#define MCM_NM 10 //10
+#define MCM_NM 1 //10
 #define DT_USED double
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b)) // from xf_fintech/utils.hpp
