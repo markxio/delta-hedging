@@ -291,7 +291,7 @@ read_timestep_loop:
             }
         }
 
-        void computeStock(ap_uint<16> paths, ap_uint<16> steps, DT underlying, hls::stream<DT>& s1, hls::stream<DT>& stock_out, hls::stream<DT>& stock_out_copy, hls::stream<DT>& lastStock) {
+        void computeStockOld(ap_uint<16> paths, ap_uint<16> steps, DT underlying, hls::stream<DT>& s1, hls::stream<DT>& stock_out, hls::stream<DT>& stock_out_copy, hls::stream<DT>& lastStock) {
 stock_path_loop:
             for (unsigned int i = 0; i < paths; i++) {
                 DT stock_temp = underlying;
@@ -309,12 +309,52 @@ stock_timestep_loop:
             }
         }
 
+        void computeStock(ap_uint<16> paths, ap_uint<16> steps, DT underlying, hls::stream<DT>& s1, hls::stream<DT>& stock_out, hls::stream<DT>& stock_out_copy, hls::stream<DT>& lastStock) {
+            DT stock_temp[MAX_PATHS];
+stock_timestep_loop:
+            for (int step = 0; step < steps+1; step++) {
+stock_path_loop:
+                for (unsigned int i = 0; i < paths; i++) {
+#pragma hls dependence variable=stock_temp inter false
+                    if(0 == step) {
+                        stock_temp[i] = underlying;
+                        stock_out.write(underlying);
+                    } else {
+                        DT s1_temp = s1.read();
+                        DT stock_out_temp = qfi::FPTwoMul(stock_temp[i], s1_temp); // 100.0 + 0.01 * (step+1)
+                        stock_out.write(stock_out_temp);
+                        stock_out_copy.write(stock_out_temp);
+                        stock_temp[i] = stock_out_temp;
+                        if (step == steps) {
+                            lastStock.write(stock_out_temp);
+                        }
+                    }
+                }
+            }
+        }
+
+        //void computeDeltaOld(ap_uint<16> paths, ap_uint<16> steps, DT volatility, DT r, DT strike, DT dividendYield, unsigned int call, hls::stream<DT>& stock_stream, DT *maturity, hls::stream<DT>& delta_out, hls::stream<DT>& lastDelta) {
+        //    DT delta_temp;
+//delta_path_loop:
+        //    for (unsigned int i = 0; i < paths; i++) { 
+//delta_timestep_loop:
+        //        for (unsigned int step = 0; step < steps; step++) {
+        //            DT stock_temp = stock_stream.read();
+        //            cfBSMEngineDeltaSpot<DT>(stock_temp, volatility, r, maturity[step], strike, dividendYield, call, &delta_temp);
+        //            delta_out.write(delta_temp);
+        //        }
+        //        DT discard = stock_stream.read(); // only need delta for up to steps-1 (aka delta[path][steps-1] == stockAmount[path][steps])
+
+        //        lastDelta.write(delta_temp);
+        //    }
+        //}
+
         void computeDelta(ap_uint<16> paths, ap_uint<16> steps, DT volatility, DT r, DT strike, DT dividendYield, unsigned int call, hls::stream<DT>& stock_stream, DT *maturity, hls::stream<DT>& delta_out, hls::stream<DT>& lastDelta) {
-delta_path_loop:
-            for (unsigned int i = 0; i < paths; i++) { 
-                DT delta_temp;
+            DT delta_temp;
 delta_timestep_loop:
-                for (unsigned int step = 0; step < steps; step++) {
+            for (unsigned int step = 0; step < steps; step++) {
+delta_path_loop:
+                for (unsigned int i = 0; i < paths; i++) { 
                     DT stock_temp = stock_stream.read();
                     cfBSMEngineDeltaSpot<DT>(stock_temp, volatility, r, maturity[step], strike, dividendYield, call, &delta_temp);
                     delta_out.write(delta_temp);
