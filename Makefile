@@ -17,8 +17,8 @@ help:
   @echo ""
 #######################################################################################
 TARGET := sw_emu
-#PLATFORM := xilinx_u280_xdma_201920_3 #xilinx_u250_xdma_201830_2
-PLATFORM := xilinx_u280_gen3x16_xdma_1_202211_1
+PLATFORM := xilinx_u280_xdma_201920_3 #xilinx_u250_xdma_201830_2
+#PLATFORM := xilinx_u280_gen3x16_xdma_1_202211_1
 HOST_EXE := host
 XO := krnl_scenario.$(TARGET).xo
 XCLBIN := krnl_scenario.$(TARGET).xclbin
