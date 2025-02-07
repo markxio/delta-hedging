@@ -5,13 +5,15 @@
 #include "xf_fintech/enums.hpp"
 #ifndef __SYNTHESIS__
 #include <assert.h>
+#include <stdio.h>
 #endif
 
-#define SAMP_NUM 50000 // MCM_NM * SAMP_PER_SIM
-#define SAMP_PER_SIM 50000 
+#define SAMP_NUM 25000 // MCM_NM * SAMP_PER_SIM
+#define SAMP_PER_SIM 25000 
 #define MAX_SAMPLE 134217727
+#define MAX_STEPS 84
 #define MCM_NM 1
-#define DT_USED double
+#define DT_USED float //double
 #define MAX(a, b) ((a) > (b) ? (a) : (b)) // from xf_fintech/utils.hpp
 
 namespace rep {
@@ -259,7 +261,23 @@ class ReplicationPathPricer {
 
             // buffers across loops
             DT money_account[SAMP_NUM], stock[SAMP_NUM], stockAmount[SAMP_NUM], t[SAMP_NUM];
+            DT s1[SAMP_NUM][MAX_STEPS], s1_last_step[SAMP_NUM];
             DT stock_temp, delta;
+
+#pragma HLS bind_storage variable=money_account type=RAM_S2P impl=URAM
+#pragma HLS bind_storage variable=stock         type=RAM_S2P impl=URAM
+#pragma HLS bind_storage variable=stockAmount   type=RAM_S2P impl=URAM
+#pragma HLS bind_storage variable=t             type=RAM_S2P impl=URAM
+#pragma HLS bind_storage variable=s1            type=RAM_S2P impl=URAM
+#pragma HLS bind_storage variable=s1_last_step  type=RAM_S2P impl=URAM
+
+            //printf("before any loop\n");
+            
+            //hls::stream<DT> s1_stream("s1_stream");
+
+//#pragma HLS STREAM variable=s1_stream 
+
+#pragma hls dataflow
 
 buffer_init_loop:
             for (unsigned int i = 0; i < paths; i++) {
@@ -267,25 +285,47 @@ buffer_init_loop:
                 stock[i] = underlying;
                 stockAmount[i] = delta_t0;
                 t[i] = 0.0;
+                //printf("buffer_init_loop: i -- %u\n", i);
             }
 
-path_loop:
+buffer_s1_path_loop:
             for (unsigned int i = 0; i < paths; i++) {
-                /**********************************/
-                /*** hedging during option life ***/
-                /**********************************/
+buffer_timestep_loop:
+                for (unsigned int step = 0; step < steps; step++) {
+                //for (unsigned int step = 0; step < steps-1; step++) {
+                    DT logS = pathStrmIn.read();
+                    DT s1_tmp = qfi::FPExp(logS); 
+                    s1[i][step] = s1_tmp;
+                    s1_last_step[i] = s1_tmp;
+                    //printf("buffer_s1_path_loop_buffer_timestep_loop: i -- %u, step -- %u\n", i, step);
+                 }
+            }
+
+//stream_s1_last_step_loop:
+//            for (unsigned int i=0; i< paths; i++) {
+//                s1_stream.write(s1[i][steps-1]);
+//            }
 
 timestep_loop:
-                for (unsigned int step = 0; step < steps-1; step++) {
-                    stock_temp = stock[i];
-                    // underlying stock price evolves lognormally
-                    // with a fixed known volatility that stays
-                    // constant throughout time
-                    DT stock_buffer = getStockAfterGrowth(stock_temp, pathStrmIn); 
-                    // buffer last step's stock value for option expiration loop
-                    stock[i] = stock_buffer;
-                    stock_temp = stock_buffer;
-                    
+            for (unsigned int step = 0; step < steps-1; step++) {
+path_loop:
+                for (unsigned int i = 0; i < paths; i++) {
+                    /**********************************/
+                    /*** hedging during option life ***/
+                    /**********************************/
+                    //printf("timestep_loop_path_loop: step -- %u, i -- %u\n", step, i);
+
+                    //stock_temp = stock[i];
+                    //// underlying stock price evolves lognormally
+                    //// with a fixed known volatility that stays
+                    //// constant throughout time
+                    //DT stock_buffer = getStockAfterGrowth(stock_temp, pathStrmIn); 
+                    //// buffer last step's stock value for option expiration loop
+                    //stock[i] = stock_buffer;
+                    //stock_temp = stock_buffer;
+                    DT stock_temp = qfi::FPTwoMul(stock[i], s1[i][step]);
+                    stock[i] = stock_temp;
+
                     // time flows
                     t[i] += dt;
                     
@@ -300,8 +340,14 @@ timestep_loop:
                     cfBSMEngineDeltaSpot<DT>(stock_temp, volatility, r, maturity_minus_t, strike, dividendYield, call, &delta);
 
                     DT stockAmount_temp = stockAmount[i];
+
                     // re-hedging
-                    money_account[i] -= (delta - stockAmount_temp)*stock_temp;
+                    //money_account[i] -= (delta - stockAmount_temp)*stock_temp;
+                    DT money_account_temp = money_account[i];
+                    DT delta_m_stockAmount = delta - stockAmount_temp;
+                    DT product = delta_m_stockAmount * stock_temp;
+                    money_account[i] = money_account_temp - product; 
+                    
                     stockAmount[i] = delta;
                 }
             }
@@ -311,9 +357,12 @@ option_expiration_loop:
                 /*************************/
                 /*** option expiration ***/
                 /*************************/
+                //printf("option_expiration_loop: i -- %u\n", i);
                 // read buffer: last step's stock value in stock[SAMP_NUM]
                 DT stock_of_last_step = stock[i];
-                DT final_stock = getStockAfterGrowth(stock_of_last_step, pathStrmIn); 
+                //DT final_stock = getStockAfterGrowth(stock_of_last_step, pathStrmIn);
+                //DT s1_last_step = s1_stream.read(); 
+                DT final_stock = qfi::FPTwoMul(stock_of_last_step, s1_last_step[i]); //s1_last_step); 
  
                 // read buffer: last step's money_account
                 DT money_account_temp = money_account[i];
@@ -385,7 +434,7 @@ option_expiration_loop:
                     DT strike,
                     bool optionType, // option parameter
                     ap_uint<32>* seed,
-                    DT* output,
+                    double* output,
                     DT requiredTolerance = 0.02,
                     unsigned int requiredSamples = 1024,
                     unsigned int timeSteps = 100,
@@ -462,6 +511,6 @@ init_pathpri_pathgen_loop:
                     qfi::RNGSequence<DT, RNG>, UN, VN, SN>(timeSteps, maxSamples, requiredSamples, requiredTolerance, pathGenInst, pathPriInst, rngSeqInst);
 
                 // output the price of option
-                output[0] = replicationError;
+                output[0] = (double) replicationError;
             } // MCEuropeanEngine
 } // rep

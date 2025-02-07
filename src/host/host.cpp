@@ -31,8 +31,8 @@ int main(int argc, char** argv)
     unsigned int seed = 3;
     double requiredTolerance = 0.01;
 
-    unsigned int scenarios = 50000; // requiredSamples, simulation stops when N=scenarios reached
-    unsigned int hedgesNum = 84; // timeSteps, number of timesteps per scenario
+    unsigned int scenarios = 25000; // requiredSamples, simulation stops when N=scenarios reached
+    unsigned int hedgesNum = 84; //21; //84; // timeSteps, number of timesteps per scenario
 
 
     double *sampleInput=(double*) memalign(PAGESIZE, sizeof(double));

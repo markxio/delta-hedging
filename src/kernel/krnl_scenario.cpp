@@ -22,7 +22,7 @@ extern "C" void krnl_scenario(double maturity, unsigned int strike, unsigned int
 #pragma HLS INTERFACE s_axilite port=result bundle=control
 #pragma HLS INTERFACE s_axilite port=return bundle=control
 
-    double dividendYield = 0.0;
+    DT_USED dividendYield = 0.0;
     bool optionType = 0; // 1 for put, 0 for call
     //const xf::fintech::Type optionType = xf::fintech::Type::Put;
 
@@ -38,5 +38,5 @@ extern "C" void krnl_scenario(double maturity, unsigned int strike, unsigned int
     }
 
     // implement MCEuropeanEngine with custom PathPricer
-    rep::MCEuropeanEngine<DT_USED, MCM_NM>(underlying, volatility, dividendYield, riskFreeRate, maturity, strike, optionType, seeds, /*&result[0]*/ result, requiredTolerance, requiredSamples, timeSteps);		
+    rep::MCEuropeanEngine<DT_USED, MCM_NM>((DT_USED) underlying, (DT_USED) volatility, dividendYield, (DT_USED) riskFreeRate, (DT_USED) maturity, strike, optionType, seeds, /*&result[0]*/ result, (DT_USED) requiredTolerance, requiredSamples, timeSteps);		
 }

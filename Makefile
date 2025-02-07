@@ -49,21 +49,21 @@ build:  $(XO) $(XCLBIN) $(HOST_EXE) emconfig
 .PHONY: device
 .ONESHELL:
 device: mkrefdir $(OBJECTS) $(XCLBIN)
-  cp reference_files_$(TARGET)/$(XCLBIN) bin/.
+  cp reference_files_$(TARGET)_dataflow/$(XCLBIN) bin/.
 
 mkrefdir:
-  rm -Rf reference_files_$(TARGET)
-  mkdir -p reference_files_$(TARGET)
+  rm -Rf reference_files_$(TARGET)_dataflow
+  mkdir -p reference_files_$(TARGET)_dataflow
   mkdir -p bin
 
 # Building kernel
 .PHONY: $(OBJECTS)
 $(OBJECTS): %.xo : $(DEVICE_SRCDIR)/%.cpp
-  cd reference_files_$(TARGET) ; v++ $(KRNL_COMPILE_OPTS) -c -k krnl_scenario -I'../include' -I'../$(<D)' -o'$@' ../$<
+  cd reference_files_$(TARGET)_dataflow ; v++ $(KRNL_COMPILE_OPTS) -c -k krnl_scenario -I'../include' -I'../$(<D)' -o'$@' ../$<
 
 .PHONY: $(XCLBIN)
 $(XCLBIN): $(OBJECTS)
-  cd reference_files_$(TARGET) ; v++ $(KRNL_LINK_OPTS) -l -o'$@' $(+)
+  cd reference_files_$(TARGET)_dataflow ; v++ $(KRNL_LINK_OPTS) -l -o'$@' $(+)
 
 .PHONY: $(HOST_EXE)
 # Building Host
