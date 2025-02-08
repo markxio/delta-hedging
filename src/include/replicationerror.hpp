@@ -249,7 +249,7 @@ class ReplicationPathPricer {
         } // PE()
 
         void dataflowRegion(ap_uint<16> steps, ap_uint<16> paths, DT underlying, DT volatility, DT r, DT maturity, DT strike, DT dividendYield, DT exp_r_x_dt, DT money_T, DT dt, unsigned int call, hls::stream<DT>& pathStrmIn, hls::stream<DT>& priceStrmOut) {
-            hls::stream<DT> s1, s1Stock, s1Stock_copy, lastStock, delta, lastDelta, hedge, money_out;
+            hls::stream<DT> s1("s1"), s1Stock("s1Stock"), s1Stock_copy("s1Stock_copy"), lastStock("lastStock"), delta("delta"), lastDelta("lastDelta"), hedge("hedge"), money_out("money_out");
 
 #pragma HLS STREAM variable=s1              depth=2
 #pragma HLS STREAM variable=s1Stock         depth=2
@@ -261,14 +261,21 @@ class ReplicationPathPricer {
 #pragma HLS STREAM variable=money_out       depth=2
            
             DT maturity_minus_t[MAX_STEPS];
-
+		
+	    //printf("KERNEL -- computeMaturity\n");
 #pragma HLS dataflow
             computeMaturity(paths, steps, maturity, dt, maturity_minus_t);
+	    //printf("KERNEL -- readPaths\n");
             readPaths(paths, steps, pathStrmIn, s1);
+	    //printf("KERNEL -- comptueStock\n");
             computeStock(paths, steps, underlying, s1, s1Stock, s1Stock_copy, lastStock);
+	    //printf("KERNEL -- computeDelta\n");
             computeDelta(paths, steps, volatility, r, strike, dividendYield, call, s1Stock, maturity_minus_t, delta, lastDelta);
+	    //printf("KERNEL -- computeHedge\n");
             computeHedge(paths, steps, exp_r_x_dt, s1Stock_copy, delta, hedge);
+	    //printf("KERNEL -- reduceMoney\n");
             reduceMoney(hedge, money_out);
+	    //printf("KERNEL -- optionExpiration\n");
             optionExpiration(paths, steps, exp_r_x_dt, strike, money_T, money_out, lastDelta, lastStock, priceStrmOut);
         }
 
@@ -291,23 +298,23 @@ read_timestep_loop:
             }
         }
 
-        void computeStockOld(ap_uint<16> paths, ap_uint<16> steps, DT underlying, hls::stream<DT>& s1, hls::stream<DT>& stock_out, hls::stream<DT>& stock_out_copy, hls::stream<DT>& lastStock) {
-stock_path_loop:
-            for (unsigned int i = 0; i < paths; i++) {
-                DT stock_temp = underlying;
-                stock_out.write(stock_temp);
-                DT stock_out_temp;
-stock_timestep_loop:
-                for (int step = 0; step < steps; step++) {
-                    DT s1_temp = s1.read();
-                    stock_out_temp = qfi::FPTwoMul(stock_temp, s1_temp); // 100.0 + 0.01 * (step+1)
-                    stock_out.write(stock_out_temp);
-                    stock_out_copy.write(stock_out_temp);
-                    stock_temp = stock_out_temp;
-                }
-                lastStock.write(stock_out_temp);
-            }
-        }
+//        void computeStockOld(ap_uint<16> paths, ap_uint<16> steps, DT underlying, hls::stream<DT>& s1, hls::stream<DT>& stock_out, hls::stream<DT>& stock_out_copy, hls::stream<DT>& lastStock) {
+//stock_path_loop:
+//            for (unsigned int i = 0; i < paths; i++) {
+//                DT stock_temp = underlying;
+//                stock_out.write(stock_temp);
+//                DT stock_out_temp;
+//stock_timestep_loop:
+//                for (int step = 0; step < steps; step++) {
+//                    DT s1_temp = s1.read();
+//                    stock_out_temp = qfi::FPTwoMul(stock_temp, s1_temp); // 100.0 + 0.01 * (step+1)
+//                    stock_out.write(stock_out_temp);
+//                    stock_out_copy.write(stock_out_temp);
+//                    stock_temp = stock_out_temp;
+//                }
+//                lastStock.write(stock_out_temp);
+//            }
+//        }
 
         void computeStock(ap_uint<16> paths, ap_uint<16> steps, DT underlying, hls::stream<DT>& s1, hls::stream<DT>& stock_out, hls::stream<DT>& stock_out_copy, hls::stream<DT>& lastStock) {
             DT stock_temp[MAX_PATHS];
@@ -351,6 +358,7 @@ stock_path_loop:
 
         void computeDelta(ap_uint<16> paths, ap_uint<16> steps, DT volatility, DT r, DT strike, DT dividendYield, unsigned int call, hls::stream<DT>& stock_stream, DT *maturity, hls::stream<DT>& delta_out, hls::stream<DT>& lastDelta) {
             DT delta_temp;
+	    unsigned int debug_count=0;
 delta_timestep_loop:
             for (unsigned int step = 0; step < steps; step++) {
 delta_path_loop:
@@ -358,11 +366,15 @@ delta_path_loop:
                     DT stock_temp = stock_stream.read();
                     cfBSMEngineDeltaSpot<DT>(stock_temp, volatility, r, maturity[step], strike, dividendYield, call, &delta_temp);
                     delta_out.write(delta_temp);
-                }
-                DT discard = stock_stream.read(); // only need delta for up to steps-1 (aka delta[path][steps-1] == stockAmount[path][steps])
 
-                lastDelta.write(delta_temp);
+		    if (steps-1 == step) {
+			debug_count++;
+               		lastDelta.write(delta_temp);
+			DT discard = stock_stream.read(); // only need delta for up to steps-1 (aka delta[path][steps-1] == stockAmount[path][steps])
+		    }
+                }
             }
+	    //printf("KERNEL -- computeDelta finished, debug_count: %u\n", debug_count);
         }
 
         void computeHedge(ap_uint<16> paths, ap_uint<16> steps, DT exp_r_x_dt, hls::stream<DT>& stock, hls::stream<DT>& delta, hls::stream<DT>& hedge) {
@@ -375,7 +387,7 @@ hedge_timestep_loop:
                     DT stock_temp = stock.read();
                     DT delta_p1 = delta.read();
                     DT hedge_temp = (delta_p1 - delta_p0) * stock_temp * pow(exp_r_x_dt, (steps)-(step+1));
-                    //printf("hedge: %f, delta_p0: %.10f, delta_p1: %.10f, stock_temp: %f, pow: %.10f\n", hedge_temp, delta_p0, delta_p1, stock_temp, pow(exp_r_x_dt, steps-(step+1)));
+                    ////printf("hedge: %f, delta_p0: %.10f, delta_p1: %.10f, stock_temp: %f, pow: %.10f\n", hedge_temp, delta_p0, delta_p1, stock_temp, pow(exp_r_x_dt, steps-(step+1)));
                     hedge.write(hedge_temp);
                     delta_p0 = delta_p1;
                 }
@@ -401,10 +413,13 @@ expiration_path_loop:
                 /*************************/
                 /*** option expiration ***/
                 /*************************/
+		////printf("KERNEL -- lastStock.read, %u\n", i);
                 DT final_stock = lastStock.read();
+		////printf("KERNEL -- lastDelta.read\n");
                 DT final_stockAmount = lastDelta.read();
 
                 // note: money_account[] and money_T already compounded
+		////printf("KERNEL -- money_account.read\n");
                 DT money_temp = money_account.read();
                 DT final_money_account = money_T - money_temp; 
                 
@@ -416,6 +431,7 @@ expiration_path_loop:
                 final_money_account += final_stockAmount*final_stock;
 
                 // final Profit&Loss
+		////printf("KERNEL -- write PnL\n");
                 priceStrmOut.write(final_money_account);
             }
         } 
