@@ -137,7 +137,7 @@ int main(int argc, char** argv)
     // Compare the results of the Device to the simulation
     std::cout << "-----------------------------------------" << std::endl;
     std::cout << "Kernel result" << std::endl;
-    printf("P&L: %f\n", *results);
+    printf("P&L: %d\n", *results);
     std::cout << "-----------------------------------------" << std::endl;
 
 
